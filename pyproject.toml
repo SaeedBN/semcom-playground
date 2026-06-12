@@ -1,0 +1,36 @@
+[project]
+name = "semcom-playground"
+version = "0.1.0"
+description = "Exploring AI-native wireless communication through semantic transmission of text and images using modern ML and communication-system simulation tools."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Saeed Bagherinejad" }
+]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "torch",
+    "hydra-core",
+    "omegaconf",
+    "pytest",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "black",
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
