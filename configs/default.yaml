@@ -1,0 +1,12 @@
+defaults:
+  - model: debug_model
+  - channel: awgn
+  - dataset: toy_text
+  - training: debug
+  - tracking: offline
+  - _self_
+
+experiment:
+  name: debug_experiment
+  seed: 42
+  output_dir: results/debug

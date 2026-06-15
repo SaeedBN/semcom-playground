@@ -1,0 +1,3 @@
+name: debug_model
+d_model: 32
+latent_dim: 16
