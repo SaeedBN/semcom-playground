@@ -3,7 +3,6 @@ from torch.utils.data import DataLoader, Dataset
 
 from semcom.data.tokenizer import SimpleTextTokenizer
 
-
 TOY_TEXT_SENTENCES = [
     "semantic communication preserves meaning",
     "wireless channels introduce noise",

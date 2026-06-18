@@ -18,8 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "pre-commit",
     "ruff",
-    "black",
     "pytest",
 ]
 
@@ -29,8 +29,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
-[tool.black]
-line-length = 88
-
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
