@@ -1,3 +1,7 @@
-name: debug_model
+name: debug_text_semantic_autoencoder
 d_model: 32
 latent_dim: 16
+n_heads: 4
+num_encoder_layers: 1
+num_decoder_layers: 1
+dropout: 0.1
