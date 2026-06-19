@@ -5,9 +5,10 @@ from torch import nn
 
 from semcom.channels.factory import create_channel
 from semcom.data.toy_text import create_toy_text_dataloader
+from semcom.evaluation.text_metrics import sequence_accuracy, token_accuracy
 from semcom.models.factory import create_model
 from semcom.utils.config import load_config
-from semcom.utils.io import ensure_dict, save_config
+from semcom.utils.io import ensure_dir, save_config, save_json
 from semcom.utils.seed import set_seed
 
 
@@ -16,7 +17,8 @@ def main() -> None:
 
     set_seed(cfg.experiment.seed)
 
-    output_dir = ensure_dict(Path(cfg.experiment.output_dir))
+    output_dir = ensure_dir(Path(cfg.experiment.output_dir))
+    checkpoint_dir = ensure_dir(output_dir / "checkpoints")
     save_config(cfg, output_dir)
 
     device = torch.device(cfg.training.device)
@@ -46,16 +48,21 @@ def main() -> None:
     print(f"Experiment: {cfg.experiment.name}")
     print(f"Output directory: {output_dir}")
     print(f"Dataset: {cfg.dataset.name}")
-    print(f"channel: {cfg.channel.name}")
+    print(f"Channel: {cfg.channel.name}")
     print(f"SNR: {cfg.channel.snr_db} dB")
     print(f"Model: {cfg.model.name}")
     print(f"Vocabulary size: {tokenizer.vocab_size}")
     print(f"Number of batches: {len(dataloader)}")
     print(f"Device: {device}")
 
+    history: list[dict[str, float | int]] = []
+
     for epoch in range(cfg.training.epochs):
         model.train()
+
         total_loss = 0.0
+        total_token_accuracy = 0.0
+        total_sequence_accuracy = 0.0
 
         print(f"Epoch {epoch + 1}/{cfg.training.epochs}")
 
@@ -79,17 +86,75 @@ def main() -> None:
             loss.backward()
             optimizer.step()
 
+            batch_token_accuracy = token_accuracy(
+                logits=logits.detach(),
+                target_ids=target_ids,
+                pad_id=tokenizer.pad_id,
+            )
+
+            batch_sequence_accuracy = sequence_accuracy(
+                logits=logits.detach(),
+                target_ids=target_ids,
+                pad_id=tokenizer.pad_id,
+            )
+
             total_loss += loss.item()
+            total_token_accuracy += batch_token_accuracy
+            total_sequence_accuracy += batch_sequence_accuracy
 
             print(
                 f"  Batch {batch_idx + 1}/{len(dataloader)} "
                 f"| loss={loss.item():.4f} "
-                f"| logits shape={tuple(logits.shape)}"
+                f"| toekn_acc={batch_token_accuracy:.4f} "
+                f"| seq_acc={batch_sequence_accuracy:.4f}"
             )
 
         mean_loss = total_loss / len(dataloader)
-        print(f"Mean Training Loss: {mean_loss:.4f}")
+        mean_token_accuracy = total_token_accuracy / len(dataloader)
+        mean_sequence_accuracy = total_sequence_accuracy / len(dataloader)
 
+        epoch_metrics = {
+            "epoch": epoch + 1,
+            "train_loss": mean_loss,
+            "train_token_accuracy": mean_token_accuracy,
+            "train_sequence_accuracy": mean_sequence_accuracy,
+        }
+
+        history.append(epoch_metrics)
+
+        print(
+            f"Mean Training Loss: {mean_loss:.4f} "
+            f"| token_acc={mean_token_accuracy:.4f} "
+            f"| seq_acc={mean_sequence_accuracy:.4f}"
+        )
+
+    checkpoint_path = checkpoint_dir / "model.pt"
+    torch.save(
+        {
+            "model_state_dic": model.state_dict(),
+            "optimizer_state_dic": optimizer.state_dict(),
+            "config": cfg,
+            "vocab_size": tokenizer.vocab_size,
+            "pad_id": tokenizer.pad_id,
+        },
+        checkpoint_path,
+    )
+
+    metrics = {
+        "experiment_name": cfg.experiment.name,
+        "model_name": cfg.model.name,
+        "dataset_name": cfg.dataset.name,
+        "channel_name": cfg.channel.name,
+        "snr_db": cfg.channel.snr_db,
+        "epochs": cfg.training.epochs,
+        "history": history,
+        "final": history[-1],
+    }
+
+    save_json(metrics, output_dir / "metrics.json")
+
+    print(f"Saved checkpoint to: {checkpoint_path}")
+    print(f"Saved metrics to: {output_dir / 'metrics.json'}")
     print("Training completed.")
 
 
