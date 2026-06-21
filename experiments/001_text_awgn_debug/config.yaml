@@ -1,0 +1,34 @@
+experiment:
+  name: 001_text_awgn_debug
+  seed: 42
+  output_dir: results/001_text_awgn_debug
+
+modality:
+  name: text
+
+model:
+  name: debug_text_semantic_autoencoder
+  d_model: 32
+  latent_dim: 16
+  n_heads: 4
+  num_encoder_layers: 1
+  num_decoder_layers: 1
+  dropout: 0.1
+
+channel:
+  name: awgn
+  snr_db: 10.0
+
+dataset:
+  name: toy_text
+  max_length: 16
+  batch_size: 4
+
+training:
+  epochs: 50
+  learning_rate: 0.001
+  device: cpu
+
+tracking:
+  backend: offline
+  log_dir: results/logs

@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 import torch
@@ -7,13 +8,35 @@ from semcom.channels.factory import create_channel
 from semcom.data.toy_text import create_toy_text_dataloader
 from semcom.evaluation.text_metrics import sequence_accuracy, token_accuracy
 from semcom.models.factory import create_model
-from semcom.utils.config import load_config
+from semcom.utils.config import load_config, load_config_from_path
 from semcom.utils.io import ensure_dir, save_config, save_json
 from semcom.utils.seed import set_seed
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="We will train a semantic communication model."
+    )
+
+    parser.add_argument(
+        "-c",
+        "--config-path",
+        dest="config_path",
+        type=str,
+        default=None,
+        help="Path to the configuration file.",
+    )
+
+    return parser.parse_args()
+
+
 def main() -> None:
-    cfg = load_config()
+    args = parse_args()
+
+    if args.config_path is None:
+        cfg = load_config()
+    else:
+        cfg = load_config_from_path(config_path=args.config_path)
 
     set_seed(cfg.experiment.seed)
 

@@ -1,7 +1,10 @@
-.PHONY: test train
+.PHONY: test train train-dbg
 
 test:
 	pytest
 
-train:
+train-dbg:
 	python scripts/train.py
+
+train:
+	python scripts/train.py -c $(CP)
