@@ -1,0 +1,55 @@
+experiment:
+  name: 002_deepsc_paper_awgn
+  seed: 42
+  output_dir: results/002_deepsc_paper_awgn
+
+modality:
+  name: text
+
+paper:
+  name: deepsc
+  title: Deep Learning Enabled Semantic Communication Systems
+  alignment:
+    dataset: europarl
+    channel: awgn
+    architecture: table_i_style
+
+model:
+  name: deepsc_text_paper
+  d_model: 128
+  n_heads: 8
+  num_encoder_layers: 3
+  num_decoder_layers: 3
+  channel_encoder_hidden_dim: 256
+  channel_symbols_dim: 16
+  channel_decoder_hidden_dim: 256
+  dropout: 0.1
+
+channel:
+  name: awgn
+  # snr_db: 10.0
+
+dataset:
+  name: europarl_text
+  text_path: dataset/processed/europarl/europarl_en.txt
+  min_words: 4
+  max_words: 30
+  max_length: 32
+  max_samples: 20000
+  train_fraction: 0.9
+  batch_size: 16
+  shuffle_train: true
+
+training:
+  epochs: 10
+  learning_rate: 0.0005
+  device: cpu
+  snr_values_db: [0, 3, 6, 9, 12, 15, 18]
+
+evaluation:
+  snr_values_db: [0, 3, 6, 9, 12, 15, 18]
+  num_reconstruction_examples: 5
+
+tracking:
+  backend: offline
+  log_dir: results/logs

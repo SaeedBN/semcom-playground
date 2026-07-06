@@ -1,4 +1,4 @@
-.PHONY: test train train-dbg lint format docker-build docker-test docker-train docker-shell
+.PHONY: test train train-dbg lint format docker-build docker-test docker-train docker-shell prepare-europarl run-deepsc-text docker-run-deepsc-text
 
 test:
 	pytest
@@ -10,7 +10,7 @@ train:
 	python scripts/train.py -c $(CP)
 
 lint:
-	ruff check src tests scripts
+	ruff check --fix src tests scripts
 
 format:
 	ruff format src tests scripts
@@ -26,3 +26,12 @@ docker-train:
 
 docker-shell:
 	docker compose run --rm semcom bash
+
+prepare-europarl:
+	python src/semcom/data/prepare_europarl.py --input-dir $(IN)
+
+run-deepsc-text:
+	python scripts/run_deepsc_text.py -c $(CP)
+
+docker-run-deepsc-text:
+	docker compose run --rm semcom make run-deepsc-text CP=$(CP)
