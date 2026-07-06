@@ -31,7 +31,7 @@ sentence
 Expected processed dataset path:
 
 ```text
-dataset/processed/europarl/europarl_en_4_30.txt
+dataset/processed/europarl/europarl_en.txt
 ```
 
 Prepare dataset:
