@@ -15,6 +15,7 @@ dependencies = [
     "omegaconf",
     "pytest",
     "w3lib",
+    "nltk",
     "sionna",
 ]
 

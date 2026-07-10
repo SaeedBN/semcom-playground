@@ -9,7 +9,7 @@ from torch import nn
 from semcom.channels.factory import create_channel
 from semcom.data.europarl import create_europarl_dataloaders
 from semcom.evaluation.text_metrics import (
-    predictions_to_token_ids,
+    corpus_bleu_score,
     sequence_accuracy,
     token_accuracy,
 )
@@ -129,75 +129,115 @@ def evaluate(
     model: nn.Module,
     channel: nn.Module,
     dataloader: torch.utils.data.DataLoader,
-    loss_fn: nn.Module,
-    tokenizer: Any,
+    token_to_idx: dict[str, int],
     device: torch.device,
     max_examples: int,
+    max_length: int,
 ) -> dict[str, Any]:
+
+    id_to_token = {idx: token for token, idx in token_to_idx.items()}
+    pad_id = token_to_idx["<pad>"]
+    bos_id = token_to_idx.get("<bos>", token_to_idx.get("<start>"))
+    eos_id = token_to_idx.get("<eos>", token_to_idx.get("<end>"))
+
+    if bos_id is None or eos_id is None:
+        raise ValueError("Vocabulary must contain BOS/EOS or start/end tokens.")
+
+    def decode_idx_to_token(idx_seq: list[int]) -> str:
+        ignored_token_ids = {pad_id, bos_id, eos_id}
+
+        decoded_tokens = []
+
+        for token_id in idx_seq:
+            token_id = int(token_id)
+
+            if token_id == eos_id:
+                break
+
+            if token_id in ignored_token_ids:
+                continue
+
+            token = id_to_token.get(int(token_id), "<unk>")
+            decoded_tokens.append(token)
+
+        return " ".join(decoded_tokens)
 
     model.eval()
 
-    total_loss = 0.0
-    total_token_accuracy = 0.0
-    total_sequence_accuracy = 0.0
+    all_references = []
+    all_hypotheses = []
     examples = []
 
     for batch in dataloader:
         input_ids = batch["input_ids"].to(device)
-        decoder_input_ids = batch["decoder_input_ids"].to(device)
-        target_ids = batch["target_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
-        decoder_attention_mask = batch["decoder_attention_mask"].to(device)
 
-        logits = model(
+        generated_ids = model.generate(
             input_ids=input_ids,
-            decoder_input_ids=decoder_input_ids,
             attention_mask=attention_mask,
-            decoder_attention_mask=decoder_attention_mask,
             channel=channel,
+            bos_id=bos_id,
+            eos_id=eos_id,
+            max_length=max_length,
         )
 
-        loss = loss_fn(
-            logits.reshape(-1, logits.size(-1)),
-            target_ids.reshape(-1),
-        )
+        input_ids_cpu = input_ids.cpu()
+        generated_ids_cpu = generated_ids.cpu()
 
-        total_loss += loss.item()
-        total_token_accuracy += token_accuracy(
-            logits=logits,
-            target_ids=target_ids,
-            pad_id=tokenizer.pad_id,
-        )
-        total_sequence_accuracy += sequence_accuracy(
-            logits=logits,
-            target_ids=target_ids,
-            pad_id=tokenizer.pad_id,
-        )
-
-        predicted_ids = predictions_to_token_ids(logits).cpu()
-        target_ids_cpu = target_ids.cpu()
-
-        for original_ids, reconstructed_ids in zip(
-            target_ids_cpu,
-            predicted_ids,
+        for reference_ids, hypothesis_ids in zip(
+            input_ids_cpu,
+            generated_ids_cpu,
             strict=False,
         ):
-            if len(examples) >= max_examples:
-                break
+            reference = decode_idx_to_token(reference_ids.tolist())
+            hypothesis = decode_idx_to_token(hypothesis_ids.tolist())
 
-            examples.append(
-                {
-                    "original": tokenizer.decode(original_ids.tolist()),
-                    "reconstructed": tokenizer.decode(reconstructed_ids.tolist()),
-                }
-            )
+            all_references.append(reference)
+            all_hypotheses.append(hypothesis)
 
-    num_batches = len(dataloader)
+            if len(examples) < max_examples:
+                examples.append(
+                    {
+                        "original": reference,
+                        "reconstructed": hypothesis,
+                    }
+                )
+
+    bleu_1 = corpus_bleu_score(
+        references=all_references,
+        hypotheses=all_hypotheses,
+        n_gram=1,
+    )
+
+    bleu_2 = corpus_bleu_score(
+        references=all_references,
+        hypotheses=all_hypotheses,
+        n_gram=2,
+    )
+
+    bleu_3 = corpus_bleu_score(
+        references=all_references,
+        hypotheses=all_hypotheses,
+        n_gram=3,
+    )
+
+    bleu_4 = corpus_bleu_score(
+        references=all_references,
+        hypotheses=all_hypotheses,
+        n_gram=4,
+    )
+
+    exact_match = sum(
+        reference == hypothesis
+        for reference, hypothesis in zip(all_references, all_hypotheses, strict=False)
+    ) / len(all_references)
 
     return {
-        "loss": total_loss / num_batches,
-        "token_accuracy": total_token_accuracy / num_batches,
-        "sequence_accuracy": total_sequence_accuracy / num_batches,
+        "bleu_1": bleu_1,
+        "bleu_2": bleu_2,
+        "bleu_3": bleu_3,
+        "bleu_4": bleu_4,
+        "exact_match": exact_match,
         "examples": examples,
     }
 
@@ -215,7 +255,7 @@ def main() -> None:
 
     device = torch.device(cfg.training.device)
 
-    train_loader, test_loader, tokenizer = create_europarl_dataloaders(
+    train_loader, test_loader, token_to_idx = create_europarl_dataloaders(
         text_path=cfg.dataset.text_path,
         min_words=cfg.dataset.min_words,
         max_words=cfg.dataset.max_words,
@@ -229,9 +269,9 @@ def main() -> None:
 
     model = create_model(
         cfg=cfg.model,
-        vocab_size=tokenizer.vocab_size,
+        vocab_size=len(token_to_idx),
         max_length=cfg.dataset.max_length,
-        pad_id=tokenizer.pad_id,
+        pad_id=token_to_idx["<pad>"],
     ).to(device)
 
     optimizer = torch.optim.AdamW(
@@ -239,13 +279,13 @@ def main() -> None:
         lr=cfg.training.learning_rate,
     )
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_id)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=token_to_idx["<pad>"])
 
     print(f"Experiment: {cfg.experiment.name}")
     print(f"Paper: {cfg.paper.title}")
     print(f"Train samples: {len(train_loader.dataset)}")
     print(f"Test samples: {len(test_loader.dataset)}")
-    print(f"Vocabulary size: {tokenizer.vocab_size}")
+    print(f"Vocabulary size: {len(token_to_idx)}")
     print(f"Model: {cfg.model.name}")
     print(f"Channel: {cfg.channel.name}")
     print(f"Training SNR range: {list(cfg.training.snr_values_db)} dB")
@@ -260,7 +300,7 @@ def main() -> None:
             dataloader=train_loader,
             loss_fn=loss_fn,
             optimizer=optimizer,
-            pad_id=tokenizer.pad_id,
+            pad_id=token_to_idx["<pad>"],
             device=device,
             snr_values_db=list(cfg.training.snr_values_db),
             epoch_index=epoch,
@@ -291,10 +331,10 @@ def main() -> None:
             model=model,
             channel=eval_channel,
             dataloader=test_loader,
-            loss_fn=loss_fn,
-            tokenizer=tokenizer,
+            token_to_idx=token_to_idx,
             device=device,
             max_examples=cfg.evaluation.num_reconstruction_examples,
+            max_length=cfg.dataset.max_length,
         )
 
         result["snr_db"] = float(snr_db)
@@ -302,9 +342,11 @@ def main() -> None:
 
         print(
             f"SNR={float(snr_db):>5.1f} dB "
-            f"| loss={result['loss']:.4f} "
-            f"| token_acc={result['token_accuracy']:.4f} "
-            f"| seq_acc={result['sequence_accuracy']:.4f}"
+            f"| BLEU-1={result['bleu_1']:.4f} "
+            f"| BLEU-2={result['bleu_2']:.4f} "
+            f"| BLEU-3={result['bleu_3']:.4f} "
+            f"| BLEU-4={result['bleu_4']:.4f} "
+            f"| exact={result['exact_match']:.4f}"
         )
 
     checkpoint_path = checkpoint_dir / "model.pt"
@@ -313,8 +355,8 @@ def main() -> None:
         {
             "model_state_dict": model.state_dict(),
             "config": cfg,
-            "vocab_size": tokenizer.vocab_size,
-            "pad_id": tokenizer.pad_id,
+            "vocab_size": len(token_to_idx),
+            "pad_id": token_to_idx["<pad>"],
         },
         checkpoint_path,
     )

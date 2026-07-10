@@ -79,8 +79,8 @@ def test_build_vocab_and_encode_sentence() -> None:
     encoded = encode_sentence("hello world", vocab)
 
     assert vocab["<pad>"] == 0
-    assert vocab["<start>"] == 1
-    assert vocab["<end>"] == 2
+    assert vocab["<bos>"] == 1
+    assert vocab["<eos>"] == 2
     assert vocab["<unk>"] == 3
-    assert encoded[0] == vocab["<start>"]
-    assert encoded[-1] == vocab["<end>"]
+    assert encoded[0] == vocab["<bos>"]
+    assert encoded[-1] == vocab["<eos>"]

@@ -31,11 +31,11 @@ channel:
 
 dataset:
   name: europarl_text
-  text_path: dataset/processed/europarl/europarl_en.txt
+  text_path: dataset/processed/europarl/
   min_words: 4
   max_words: 30
   max_length: 32
-  max_samples: 20000
+  max_samples: 10000
   train_fraction: 0.9
   batch_size: 16
   shuffle_train: true

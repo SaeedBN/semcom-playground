@@ -9,8 +9,8 @@ from w3lib.html import remove_tags
 
 SPECIAL_TOKENS = {
     "<pad>": 0,
-    "<start>": 1,
-    "<end>": 2,
+    "<bos>": 1,
+    "<eos>": 2,
     "<unk>": 3,
 }
 
@@ -101,8 +101,8 @@ def process_file(path: str | Path) -> list[str]:
 
 def tokenize(sentence: str) -> list[str]:
     tokens = sentence.lower().split(" ")
-    tokens.insert(0, "<start>")
-    tokens.append("<end>")
+    tokens.insert(0, "<bos>")
+    tokens.append("<eos>")
 
     return tokens
 

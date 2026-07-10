@@ -1,4 +1,5 @@
 import torch
+from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 
 
 def token_accuracy(
@@ -39,3 +40,61 @@ def sequence_accuracy(
 
 def predictions_to_token_ids(logits: torch.Tensor) -> torch.Tensor:
     return torch.argmax(logits, dim=-1)
+
+
+def sentence_bleu_score(
+    reference: str,
+    hypothesis: str,
+    n_gram: int = 4,
+) -> float:
+
+    reference_tokens = reference.split()
+    hypothesis_tokens = hypothesis.split()
+
+    if not reference_tokens or not hypothesis_tokens:
+        return 0.0
+
+    if n_gram == 1:
+        weights = (1.0, 0.0, 0.0, 0.0)
+    elif n_gram == 2:
+        weights = (0.5, 0.5, 0.0, 0.0)
+    elif n_gram == 3:
+        weights = (1 / 3, 1 / 3, 1 / 3, 0.0)
+    elif n_gram == 4:
+        weights = (0.25, 0.25, 0.25, 0.25)
+    else:
+        raise ValueError("n_gram must be one of {1, 2, 3, 4}.")
+
+    smoothing = SmoothingFunction().method1
+
+    return float(
+        sentence_bleu(
+            [reference_tokens],
+            hypothesis_tokens,
+            weights=weights,
+            smoothing_function=smoothing,
+        )
+    )
+
+
+def corpus_bleu_score(
+    references: list[str],
+    hypotheses: list[str],
+    n_gram: int = 4,
+) -> float:
+    if len(references) != len(hypotheses):
+        raise ValueError("references and hypotheses must have the same length.")
+
+    if not references:
+        return 0.0
+
+    scores = [
+        sentence_bleu_score(
+            reference=reference,
+            hypothesis=hypothesis,
+            n_gram=n_gram,
+        )
+        for reference, hypothesis in zip(references, hypotheses, strict=False)
+    ]
+
+    return sum(scores) / len(scores)

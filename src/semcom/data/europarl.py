@@ -1,84 +1,60 @@
+import json
+import pickle
 from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
-
-from semcom.data.tokenizer import SimpleTextTokenizer
-
-
-def load_europarl_sentences(
-    text_path: str | Path,
-    min_words: int,
-    max_words: int,
-    max_samples: int | None = None,
-) -> list[str]:
-    # Loading preprocessed text file
-    text_path = Path(text_path)
-
-    if not text_path.exists():
-        raise FileNotFoundError(f"Europarl processed text file not found: {text_path}")
-
-    sentences: list[str] = []
-
-    with text_path.open("r", encoding="utf-8", errors="ignore") as file:
-        for line in file:
-            sentence = " ".join(line.strip().split())
-
-            if not sentence:
-                continue
-
-            num_words = len(sentence.split())
-
-            if min_words <= num_words <= max_words:
-                sentences.append(sentence)
-
-            if max_samples is not None and len(sentences) >= max_samples:
-                break
-
-    if not sentences:
-        raise ValueError("File did not have valid sentences.")
-
-    return sentences
 
 
 class EuroparlTextDataset(Dataset):
     def __init__(
         self,
         text_path: str | Path,
-        min_words: int,
-        max_words: int,
         max_length: int,
         max_samples: int | None = None,
     ) -> None:
-        self.sentences = load_europarl_sentences(
-            text_path=text_path,
-            min_words=min_words,
-            max_words=max_words,
-            max_samples=max_samples,
-        )
+
         self.max_length = max_length
-        self.tokenizer = SimpleTextTokenizer(self.sentences)
+        text_path = Path(text_path)
+        with (text_path / "encoded_data.pkl").open("rb") as file:
+            self.token_ids = pickle.load(file)
+
+        with (text_path / "vocab.json").open("rb") as file:
+            self.token_to_idx = json.load(file)["token_to_idx"]
+
+        self.pad_id = self.token_to_idx["<pad>"]
+        for seq_idx in range(len(self.token_ids)):
+            seq_length = len(self.token_ids[seq_idx])
+            self.token_ids[seq_idx].extend(
+                [self.pad_id] * (self.max_length - seq_length)
+            )
+
+        if max_samples is not None:
+            sample_size = min(max_samples, len(self.token_ids))
+
+            indices = torch.randperm(
+                len(self.token_ids),
+            )[:sample_size].tolist()
+            self.token_ids = [self.token_ids[index] for index in indices]
+        print(f"length of dataset: {len(self.token_ids)}")
 
     def __len__(self) -> int:
-        return len(self.sentences)
+        return len(self.token_ids)
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
-        sentence = self.sentences[index]
+        sentence_token_ids = self.token_ids[index]
 
-        token_ids = self.tokenizer.encode(
-            sentence,
-            max_length=self.max_length,
-        )
+        input_ids = torch.tensor(sentence_token_ids, dtype=torch.long)
+        decoder_input_ids = input_ids.clone()
 
-        input_ids = torch.tensor(token_ids, dtype=torch.long)
-        target_ids = input_ids.clone()
+        target_ids = torch.empty_like(input_ids)
+        target_ids[:-1] = input_ids[1:]
+        target_ids[-1] = self.token_to_idx["<pad>"]
 
-        decoder_input_ids = torch.empty_like(target_ids)
-        decoder_input_ids[0] = self.tokenizer.bos_id
-        decoder_input_ids[1:] = target_ids[:-1]
-
-        attention_mask = (input_ids != self.tokenizer.pad_id).long()
-        decoder_attention_mask = (decoder_input_ids != self.tokenizer.pad_id).long()
+        attention_mask = (input_ids != self.token_to_idx["<pad>"]).long()
+        decoder_attention_mask = (
+            decoder_input_ids != self.token_to_idx["<pad>"]
+        ).long()
 
         return {
             "input_ids": input_ids,
@@ -99,12 +75,16 @@ def create_europarl_dataloaders(
     batch_size: int,
     shuffle_train: bool,
     seed: int,
-) -> tuple[DataLoader, DataLoader, SimpleTextTokenizer]:
+) -> tuple[DataLoader, DataLoader, dict[str, int]]:
+
+    if not max_length >= max_words + 2:
+        raise ValueError(
+            "Max length must be equal or greater than max "
+            "num of words + 2 (for <bos> and <eos>)"
+        )
 
     dataset = EuroparlTextDataset(
         text_path=text_path,
-        min_words=min_words,
-        max_words=max_words,
         max_length=max_length,
         max_samples=max_samples,
     )
@@ -135,4 +115,4 @@ def create_europarl_dataloaders(
         shuffle=False,
     )
 
-    return train_loader, test_loader, dataset.tokenizer
+    return train_loader, test_loader, dataset.token_to_idx
