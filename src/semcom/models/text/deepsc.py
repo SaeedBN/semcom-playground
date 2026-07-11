@@ -21,6 +21,7 @@ class DeepSCTextModel(nn.Module):
         n_heads: int,
         num_encoder_layers: int,
         num_decoder_layers: int,
+        d_feedforward: int,
         channel_encoder_hidden_dim: int,
         channel_symbols_dim: int,
         channel_decoder_hidden_dim: int,
@@ -49,7 +50,7 @@ class DeepSCTextModel(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=n_heads,
-            dim_feedforward=4 * d_model,
+            dim_feedforward=d_feedforward,
             dropout=dropout,
             batch_first=True,
             norm_first=False,
@@ -79,13 +80,15 @@ class DeepSCTextModel(nn.Module):
         )
 
         self.channel_decoder = DeepSCChannelDecoder(
-            in_features=channel_symbols_dim, d_model=d_model, hidden_dim=512
+            in_features=channel_symbols_dim,
+            d_model=d_model,
+            hidden_dim=channel_decoder_hidden_dim,
         )
 
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model,
             nhead=n_heads,
-            dim_feedforward=4 * d_model,
+            dim_feedforward=d_feedforward,
             dropout=dropout,
             batch_first=True,
             norm_first=False,

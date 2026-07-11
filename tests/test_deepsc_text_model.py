@@ -13,9 +13,10 @@ def test_deepsc_text_model_forward_shape() -> None:
         n_heads=8,
         num_encoder_layers=3,
         num_decoder_layers=3,
+        d_feedforward=512,
         channel_encoder_hidden_dim=256,
         channel_symbols_dim=16,
-        channel_decoder_hidden_dim=256,
+        channel_decoder_hidden_dim=512,
         dropout=0.1,
     )
 

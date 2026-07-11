@@ -33,6 +33,7 @@ def create_model(
             n_heads=cfg.n_heads,
             num_encoder_layers=cfg.num_encoder_layers,
             num_decoder_layers=cfg.num_decoder_layers,
+            d_feedforward=cfg.d_ff,
             channel_encoder_hidden_dim=cfg.channel_encoder_hidden_dim,
             channel_symbols_dim=cfg.channel_symbols_dim,
             channel_decoder_hidden_dim=cfg.channel_decoder_hidden_dim,
