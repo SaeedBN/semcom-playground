@@ -137,11 +137,11 @@ def evaluate(
 
     id_to_token = {idx: token for token, idx in token_to_idx.items()}
     pad_id = token_to_idx["<pad>"]
-    bos_id = token_to_idx.get("<bos>", token_to_idx.get("<start>"))
-    eos_id = token_to_idx.get("<eos>", token_to_idx.get("<end>"))
+    bos_id = token_to_idx.get("<bos>")
+    eos_id = token_to_idx.get("<eos>")
 
     if bos_id is None or eos_id is None:
-        raise ValueError("Vocabulary must contain BOS/EOS or start/end tokens.")
+        raise ValueError("Vocabulary must contain BOS/EOS.")
 
     def decode_idx_to_token(idx_seq: list[int]) -> str:
         ignored_token_ids = {pad_id, bos_id, eos_id}

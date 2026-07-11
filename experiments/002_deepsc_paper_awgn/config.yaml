@@ -35,7 +35,7 @@ dataset:
   min_words: 4
   max_words: 30
   max_length: 32
-  max_samples: 10000
+  max_samples: 20000
   train_fraction: 0.9
   batch_size: 16
   shuffle_train: true

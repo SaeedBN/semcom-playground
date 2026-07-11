@@ -28,7 +28,7 @@ class EuroparlTextDataset(Dataset):
             self.token_ids[seq_idx].extend(
                 [self.pad_id] * (self.max_length - seq_length)
             )
-
+        print(f"length of whole data: {len(self.token_ids)}")
         if max_samples is not None:
             sample_size = min(max_samples, len(self.token_ids))
 
@@ -36,7 +36,8 @@ class EuroparlTextDataset(Dataset):
                 len(self.token_ids),
             )[:sample_size].tolist()
             self.token_ids = [self.token_ids[index] for index in indices]
-        print(f"length of dataset: {len(self.token_ids)}")
+
+        print(f"Size of dataset: {len(self.token_ids)}")
 
     def __len__(self) -> int:
         return len(self.token_ids)

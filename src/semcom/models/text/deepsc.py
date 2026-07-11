@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import nn
 
@@ -32,16 +34,16 @@ class DeepSCTextModel(nn.Module):
         self.vocab_size = vocab_size
         self.max_length = max_length
         self.pad_id = pad_id
+        self.d_model = d_model
 
-        self.token_embedding = nn.Embedding(
+        self.source_token_embedding = nn.Embedding(
             num_embeddings=vocab_size,
             embedding_dim=d_model,
             padding_idx=pad_id,
         )
 
-        self.position_embedding = nn.Embedding(
-            num_embeddings=max_length,
-            embedding_dim=d_model,
+        self.source_position_embedding = PositionalSinusidalEmbedding(
+            d_model=d_model, dropout=dropout, max_length=max_length
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -50,7 +52,7 @@ class DeepSCTextModel(nn.Module):
             dim_feedforward=4 * d_model,
             dropout=dropout,
             batch_first=True,
-            norm_first=True,
+            norm_first=False,
         )
 
         self.semantic_encoder = nn.TransformerEncoder(
@@ -66,11 +68,18 @@ class DeepSCTextModel(nn.Module):
             nn.ReLU(),
         )
 
-        self.channel_decoder = nn.Sequential(
-            nn.Linear(channel_symbols_dim, channel_decoder_hidden_dim),
-            nn.ReLU(),
-            nn.Linear(channel_decoder_hidden_dim, d_model),
-            nn.ReLU(),
+        self.target_token_embedding = nn.Embedding(
+            num_embeddings=vocab_size,
+            embedding_dim=d_model,
+            padding_idx=pad_id,
+        )
+
+        self.target_position_embedding = PositionalSinusidalEmbedding(
+            d_model=d_model, dropout=dropout, max_length=max_length
+        )
+
+        self.channel_decoder = DeepSCChannelDecoder(
+            in_features=channel_symbols_dim, d_model=d_model, hidden_dim=512
         )
 
         decoder_layer = nn.TransformerDecoderLayer(
@@ -79,7 +88,7 @@ class DeepSCTextModel(nn.Module):
             dim_feedforward=4 * d_model,
             dropout=dropout,
             batch_first=True,
-            norm_first=True,
+            norm_first=False,
         )
 
         self.semantic_decoder = nn.TransformerDecoder(
@@ -105,15 +114,11 @@ class DeepSCTextModel(nn.Module):
 
         batch_size, target_length = decoder_input_ids.shape
 
-        target_positions = self._make_positions(
-            batch_size=batch_size,
-            sequence_length=target_length,
-            device=decoder_input_ids.device,
+        target_embeddings = self.target_token_embedding(decoder_input_ids) * torch.sqrt(
+            torch.tensor(self.d_model)
         )
 
-        target_embeddings = self.token_embedding(
-            decoder_input_ids
-        ) + self.position_embedding(target_positions)
+        target_embeddings = self.target_position_embedding(target_embeddings)
 
         target_key_padding_mask = self._make_key_padding_mask(
             token_ids=decoder_input_ids,
@@ -152,15 +157,10 @@ class DeepSCTextModel(nn.Module):
                 exceeds max_length={self.max_length}."
             )
 
-        source_positions = self._make_positions(
-            batch_size=batch_size,
-            sequence_length=sequence_length,
-            device=input_ids.device,
+        source_embeddings = self.source_token_embedding(input_ids) * torch.sqrt(
+            torch.tensor(self.d_model)
         )
-
-        source_embeddings = self.token_embedding(input_ids) + self.position_embedding(
-            source_positions
-        )
+        source_embeddings = self.source_position_embedding(source_embeddings)
 
         source_key_padding_mask = self._make_key_padding_mask(
             token_ids=input_ids,
@@ -191,15 +191,11 @@ class DeepSCTextModel(nn.Module):
     ) -> torch.Tensor:
         batch_size, target_length = decoder_input_ids.shape
 
-        target_positions = self._make_positions(
-            batch_size=batch_size,
-            sequence_length=target_length,
-            device=decoder_input_ids.device,
-        )
+        target_embeddings = self.target_token_embedding(
+            self.decode_with_memory
+        ) * torch.sqrt(torch.tensor(self.d_model))
 
-        target_embeddings = self.token_embedding(
-            decoder_input_ids
-        ) + self.position_embedding(target_positions)
+        target_embeddings = self.target_position_embedding(target_embeddings)
 
         target_key_padding_mask = decoder_input_ids == self.pad_id
 
@@ -288,15 +284,6 @@ class DeepSCTextModel(nn.Module):
 
         return generated
 
-    def _make_positions(
-        self,
-        batch_size: int,
-        sequence_length: int,
-        device: torch.device,
-    ) -> torch.Tensor:
-        positions = torch.arange(sequence_length, device=device).unsqueeze(0)
-        return positions.expand(batch_size, sequence_length)
-
     @staticmethod
     def _make_causal_mask(sequence_length: int, device: torch.device) -> torch.Tensor:
         return torch.triu(
@@ -318,3 +305,57 @@ class DeepSCTextModel(nn.Module):
             return token_ids == self.pad_id
 
         return attention_mask == 0
+
+
+class PositionalSinusidalEmbedding(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        dropout: float,
+        max_length: int = 5000,
+    ):
+        super().__init__()
+
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_length, d_model)
+        position = torch.arange(0, max_length).unsqueeze(1)
+
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model)
+        )
+
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+
+        pe = pe.unsqueeze(0)
+
+        self.register_buffer("pe", pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.pe[:, : x.size(1)]
+        return self.dropout(x)
+
+
+class DeepSCChannelDecoder(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        d_model: int,
+        hidden_dim: int = 512,
+    ) -> None:
+        super().__init__()
+
+        self.linear1 = nn.Linear(in_features, d_model)
+        self.linear2 = nn.Linear(d_model, hidden_dim)
+        self.linear3 = nn.Linear(hidden_dim, d_model)
+        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = self.linear1(x)
+
+        x = torch.relu(residual)
+        x = torch.relu(self.linear2(x))
+        x = self.linear3(x)
+
+        return self.layer_norm(residual + x)
