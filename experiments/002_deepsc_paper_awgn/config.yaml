@@ -45,7 +45,8 @@ training:
   epochs: 10
   learning_rate: 0.0005
   device: cpu
-  snr_values_db: [0, 3, 6, 9, 12, 15, 18]
+  snr_db_min: 5
+  snr_db_max: 10
 
 evaluation:
   snr_values_db: [0, 3, 6, 9, 12, 15, 18]

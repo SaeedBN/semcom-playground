@@ -46,13 +46,14 @@ def create_awgn_channel_given_snr(snr_db: float) -> nn.Module:
 
 
 def sample_training_snr(
-    snr_values_db: list[int | float],
-    batch_index: int,
-    epoch_index: int,
+    snr_db_min: float = 5,
+    snr_db_max: float = 10,
 ) -> float:
-    """For now, we are sampling cyclically. Will change this to random"""
-    index = (epoch_index + batch_index) % len(snr_values_db)
-    return float(snr_values_db[index])
+    return (
+        (torch.rand((1,)) * (snr_db_max - snr_db_min) + torch.tensor(snr_db_min))
+        .cpu()
+        .item()
+    )
 
 
 def train_one_epoch(
@@ -62,8 +63,8 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     pad_id: int,
     device: torch.device,
-    snr_values_db: list[int | float],
-    epoch_index: int,
+    snr_db_min: float = 5,
+    snr_db_max: float = 10,
 ) -> dict[str, float]:
     model.train()
 
@@ -71,11 +72,10 @@ def train_one_epoch(
     total_token_accuracy = 0.0
     total_sequence_accuracy = 0.0
 
-    for batch_index, batch in enumerate(dataloader):
+    for batch in dataloader:
         snr_db = sample_training_snr(
-            snr_values_db=snr_values_db,
-            batch_index=batch_index,
-            epoch_index=epoch_index,
+            snr_db_min=snr_db_min,
+            snr_db_max=snr_db_max,
         )
 
         channel = create_awgn_channel_given_snr(snr_db).to(device)
@@ -288,7 +288,9 @@ def main() -> None:
     print(f"Vocabulary size: {len(token_to_idx)}")
     print(f"Model: {cfg.model.name}")
     print(f"Channel: {cfg.channel.name}")
-    print(f"Training SNR range: {list(cfg.training.snr_values_db)} dB")
+    print(
+        f"Training SNR range: [{cfg.training.snr_db_min}, {cfg.training.snr_db_max}] dB"
+    )
     print(f"Evaluation SNR values: {list(cfg.evaluation.snr_values_db)} dB")
     print(f"Device: {device}")
 
@@ -302,8 +304,8 @@ def main() -> None:
             optimizer=optimizer,
             pad_id=token_to_idx["<pad>"],
             device=device,
-            snr_values_db=list(cfg.training.snr_values_db),
-            epoch_index=epoch,
+            snr_db_min=cfg.training.snr_db_min,
+            snr_db_max=cfg.training.snr_db_max,
         )
 
         history.append(
