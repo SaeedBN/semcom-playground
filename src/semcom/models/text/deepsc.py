@@ -4,6 +4,17 @@ import torch
 from torch import nn
 
 
+def power_normalize(x: torch.Tensor) -> torch.Tensor:
+    """This is what the authors implemented, doesn't make sense for me,
+    TODO: add token-wise or sentense-wise normalization"""
+    power = torch.sqrt(torch.mean(x * x))
+
+    if power.item() > 1.0:
+        return x / power
+
+    return x
+
+
 class DeepSCTextModel(nn.Module):
     """DeepSC-style semantic communication model for text.
 
@@ -108,12 +119,28 @@ class DeepSCTextModel(nn.Module):
         attention_mask: torch.Tensor | None = None,
         decoder_attention_mask: torch.Tensor | None = None,
         channel: nn.Module | None = None,
-    ) -> torch.Tensor:
-        recovered_memory, source_key_padding_mask = self.encode_channel(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            channel=channel,
-        )
+        return_tx_rx_symbols: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        if return_tx_rx_symbols:
+            (
+                recovered_memory,
+                source_key_padding_mask,
+                transmitted_symbols,
+                received_symbols,
+            ) = self.encode_channel(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                channel=channel,
+                return_tx_rx_symbols=True,
+            )
+        else:
+            recovered_memory, source_key_padding_mask = self.encode_channel(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                channel=channel,
+                return_tx_rx_symbols=False,
+            )
 
         batch_size, target_length = decoder_input_ids.shape
 
@@ -143,6 +170,9 @@ class DeepSCTextModel(nn.Module):
 
         logits = self.output_projection(decoded)
 
+        if return_tx_rx_symbols:
+            return logits, transmitted_symbols, received_symbols
+
         return logits
 
     def encode_channel(
@@ -150,7 +180,11 @@ class DeepSCTextModel(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
         channel: nn.Module | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return_tx_rx_symbols: bool = False,
+    ) -> (
+        tuple[torch.Tensor, torch.Tensor]
+        | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    ):
 
         batch_size, sequence_length = input_ids.shape
 
@@ -175,7 +209,8 @@ class DeepSCTextModel(nn.Module):
             src_key_padding_mask=source_key_padding_mask,
         )
 
-        transmitted_symbols = self.channel_encoder(memory)
+        channel_encoded = self.channel_encoder(memory)
+        transmitted_symbols = power_normalize(channel_encoded)
 
         if channel is not None:
             received_symbols = channel(transmitted_symbols)
@@ -183,6 +218,14 @@ class DeepSCTextModel(nn.Module):
             received_symbols = transmitted_symbols
 
         recovered_memory = self.channel_decoder(received_symbols)
+
+        if return_tx_rx_symbols:
+            return (
+                recovered_memory,
+                source_key_padding_mask,
+                transmitted_symbols,
+                received_symbols,
+            )
 
         return recovered_memory, source_key_padding_mask
 
@@ -194,9 +237,9 @@ class DeepSCTextModel(nn.Module):
     ) -> torch.Tensor:
         batch_size, target_length = decoder_input_ids.shape
 
-        target_embeddings = self.target_token_embedding(
-            self.decode_with_memory
-        ) * torch.sqrt(torch.tensor(self.d_model))
+        target_embeddings = self.target_token_embedding(decoder_input_ids) * torch.sqrt(
+            torch.tensor(self.d_model)
+        )
 
         target_embeddings = self.target_position_embedding(target_embeddings)
 

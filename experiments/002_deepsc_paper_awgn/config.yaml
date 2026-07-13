@@ -36,14 +36,25 @@ dataset:
   min_words: 4
   max_words: 30
   max_length: 32
-  max_samples: 20000
+  max_samples: 2000
   train_fraction: 0.9
   batch_size: 16
   shuffle_train: true
 
+mutual_information:
+  enabled: true
+  hidden_size: 10
+  learning_rate: 0.001
+  weight: 0.0009
+  gradient_clip_norm: 10.0
+
 training:
-  epochs: 10
+  epochs: 1
   learning_rate: 0.0005
+  weight_decay: 0.0005
+  adam_beta1: 0.9
+  adam_beta2: 0.98
+  adam_eps: 1e-8
   device: cpu
   snr_db_min: 5
   snr_db_max: 10

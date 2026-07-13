@@ -70,7 +70,7 @@ def normalize_text(text: str) -> str:
     text = unicode_to_ascii(text)
     text = remove_tags(text)
 
-    text = re.sub(r"([!.?])", r" \1", text)
+    text = re.sub(r"([!.?])", r" \1 ", text)
     text = re.sub(r"[^a-zA-Z.!?]+", r" ", text)
     text = re.sub(r"\s+", r" ", text)
 

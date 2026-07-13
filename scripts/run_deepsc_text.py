@@ -14,6 +14,11 @@ from semcom.evaluation.text_metrics import (
     token_accuracy,
 )
 from semcom.models.factory import create_model
+from semcom.models.mine import (
+    Mine,
+    train_mi_one_batch,
+)
+from semcom.training.deepsc_loss import deepsc_total_loss
 from semcom.utils.config import load_config_from_path
 from semcom.utils.io import ensure_dir, save_config, save_json
 from semcom.utils.seed import set_seed
@@ -59,16 +64,24 @@ def sample_training_snr(
 def train_one_epoch(
     model: nn.Module,
     dataloader: torch.utils.data.DataLoader,
-    loss_fn: nn.Module,
     optimizer: torch.optim.Optimizer,
-    pad_id: int,
+    loss_fn: nn.Module,
     device: torch.device,
+    pad_id: int,
+    mine_net: nn.Module | None,
+    mine_optimizer: torch.optim.Optimizer | None,
+    mi_weight: float,
+    mi_gradient_clip_norm: float,
     snr_db_min: float = 5,
     snr_db_max: float = 10,
 ) -> dict[str, float]:
     model.train()
 
     total_loss = 0.0
+    ce_loss = 0.0
+    mi_lower_bound = 0.0
+    num_batches = 0
+    num_mi_batches = 0
     total_token_accuracy = 0.0
     total_sequence_accuracy = 0.0
 
@@ -80,30 +93,81 @@ def train_one_epoch(
 
         channel = create_awgn_channel_given_snr(snr_db).to(device)
 
+        if mine_net is not None and mine_optimizer is not None:
+            mi_estimate = train_mi_one_batch(
+                model=model,
+                mine_net=mine_net,
+                channel=channel,
+                batch=batch,
+                optimizer=mine_optimizer,
+                gradient_clip_norm=mi_gradient_clip_norm,
+                device=device,
+            )
+            mi_lower_bound += mi_estimate
+            num_mi_batches += 1
+
+        model.train()
+        optimizer.zero_grad()
+
         input_ids = batch["input_ids"].to(device)
         decoder_input_ids = batch["decoder_input_ids"].to(device)
         target_ids = batch["target_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         decoder_attention_mask = batch["decoder_attention_mask"].to(device)
 
-        logits = model(
-            input_ids=input_ids,
-            decoder_input_ids=decoder_input_ids,
-            attention_mask=attention_mask,
-            decoder_attention_mask=decoder_attention_mask,
-            channel=channel,
-        )
+        if mine_net is not None:
+            mine_net.eval()
+            logits, transmitted_symbols, received_symbols = model(
+                input_ids=input_ids,
+                decoder_input_ids=decoder_input_ids,
+                attention_mask=attention_mask,
+                decoder_attention_mask=decoder_attention_mask,
+                channel=channel,
+                return_tx_rx_symbols=True,
+            )
 
-        loss = loss_fn(
-            logits.reshape(-1, logits.size(-1)),
-            target_ids.reshape(-1),
-        )
+            loss_output = deepsc_total_loss(
+                logits=logits,
+                target_ids=target_ids,
+                pad_id=pad_id,
+                criterion=loss_fn,
+                transmitted_symbols=transmitted_symbols,
+                received_symbols=received_symbols,
+                mine_net=mine_net,
+                mi_weight=mi_weight,
+            )
+        else:
+            logits = model(
+                input_ids=input_ids,
+                decoder_input_ids=decoder_input_ids,
+                attention_mask=attention_mask,
+                decoder_attention_mask=decoder_attention_mask,
+                channel=channel,
+            )
+
+            logits = model(
+                input_ids=input_ids,
+                decoder_input_ids=decoder_input_ids,
+                attention_mask=attention_mask,
+                decoder_attention_mask=decoder_attention_mask,
+                channel=channel,
+                return_tx_rx_symbols=False,
+            )
+
+            loss_output = deepsc_total_loss(
+                logits=logits,
+                target_ids=target_ids,
+                pad_id=pad_id,
+                criterion=loss_fn,
+            )
 
         optimizer.zero_grad()
-        loss.backward()
+        loss_output.total_loss.backward()
         optimizer.step()
 
-        total_loss += loss.item()
+        total_loss += loss_output.total_loss.detach().item()
+        ce_loss += loss_output.ce_loss.detach().item()
+        num_batches += 1
         total_token_accuracy += token_accuracy(
             logits=logits.detach(),
             target_ids=target_ids,
@@ -115,13 +179,17 @@ def train_one_epoch(
             pad_id=pad_id,
         )
 
-    num_batches = len(dataloader)
-
-    return {
-        "loss": total_loss / num_batches,
-        "token_accuracy": total_token_accuracy / num_batches,
-        "sequence_accuracy": total_sequence_accuracy / num_batches,
+    metrics = {
+        "loss": total_loss / max(num_batches, 1),
+        "ce_loss": ce_loss / max(num_batches, 1),
+        "token_accuracy": total_token_accuracy / max(num_batches, 1),
+        "sequence_accuracy": total_sequence_accuracy / max(num_batches, 1),
     }
+
+    if num_mi_batches > 0:
+        metrics["mi_lower_bound"] = mi_lower_bound / num_mi_batches
+
+    return metrics
 
 
 @torch.no_grad()
@@ -136,6 +204,9 @@ def evaluate(
 ) -> dict[str, Any]:
 
     id_to_token = {idx: token for token, idx in token_to_idx.items()}
+
+    # print(dict(list(id_to_token.items())[:20]))
+
     pad_id = token_to_idx["<pad>"]
     bos_id = token_to_idx.get("<bos>")
     eos_id = token_to_idx.get("<eos>")
@@ -274,12 +345,31 @@ def main() -> None:
         pad_id=token_to_idx["<pad>"],
     ).to(device)
 
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=cfg.training.learning_rate,
+        lr=float(cfg.training.learning_rate),
+        betas=(
+            float(cfg.training.adam_beta1),
+            float(cfg.training.adam_beta2),
+        ),
+        eps=float(cfg.training.adam_eps),
+        weight_decay=float(cfg.training.weight_decay),
     )
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index=token_to_idx["<pad>"])
+    loss_fn = nn.CrossEntropyLoss(reduction="none")
+
+    mine_net = None
+    mine_optimizer = None
+
+    if bool(cfg.mutual_information.enabled):
+        mine_net = Mine(
+            hidden_size=int(cfg.mutual_information.hidden_size),
+        ).to(device)
+
+        mine_optimizer = torch.optim.Adam(
+            mine_net.parameters(),
+            lr=float(cfg.mutual_information.learning_rate),
+        )
 
     print(f"Experiment: {cfg.experiment.name}")
     print(f"Paper: {cfg.paper.title}")
@@ -300,10 +390,14 @@ def main() -> None:
         train_metrics = train_one_epoch(
             model=model,
             dataloader=train_loader,
-            loss_fn=loss_fn,
             optimizer=optimizer,
-            pad_id=token_to_idx["<pad>"],
+            loss_fn=loss_fn,
             device=device,
+            pad_id=token_to_idx["<pad>"],
+            mine_net=mine_net,
+            mine_optimizer=mine_optimizer,
+            mi_weight=float(cfg.mutual_information.weight),
+            mi_gradient_clip_norm=float(cfg.mutual_information.gradient_clip_norm),
             snr_db_min=cfg.training.snr_db_min,
             snr_db_max=cfg.training.snr_db_max,
         )
@@ -317,12 +411,19 @@ def main() -> None:
             }
         )
 
-        print(
+        log_message = (
             f"Epoch {epoch + 1:03d}/{cfg.training.epochs} "
             f"| loss={train_metrics['loss']:.4f} "
-            f"| token_acc={train_metrics['token_accuracy']:.4f} "
-            f"| seq_acc={train_metrics['sequence_accuracy']:.4f}"
+            f"| CE={train_metrics['ce_loss']:.4f} "
         )
+
+        if "mi_lower_bound" in train_metrics:
+            log_message += f" | mi={train_metrics['mi_lower_bound']}"
+
+        log_message += f" | token_acc={train_metrics['token_accuracy']:.4f} "
+        log_message += f" | seq_acc={train_metrics['sequence_accuracy']:.4f}"
+
+        print(log_message)
 
     evaluation_results = []
 
@@ -366,10 +467,17 @@ def main() -> None:
     metrics = {
         "experiment_name": cfg.experiment.name,
         "paper_reference": cfg.paper.title,
-        "training_snr_range_db": list(cfg.training.snr_values_db),
+        "training_snr_db_min": cfg.training.snr_db_min,
+        "training_snr_db_max": cfg.training.snr_db_max,
         "evaluation_snr_values_db": list(cfg.evaluation.snr_values_db),
         "training_history": history,
         "evaluation_results": evaluation_results,
+        "mutual_information": {
+            "enabled": bool(cfg.mutual_information.enabled),
+            "weight": float(cfg.mutual_information.weight),
+            "hidden_size": int(cfg.mutual_information.hidden_size),
+            "learning_rate": float(cfg.mutual_information.learning_rate),
+        },
     }
 
     save_json(metrics, output_dir / "metrics.json")
