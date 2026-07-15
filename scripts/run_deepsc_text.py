@@ -5,7 +5,7 @@ from typing import Any
 import torch
 from torch import nn
 
-from semcom.channels.deepsc import create_deepsc_awgn_channel_from_snr
+from semcom.channels.deepsc import create_deepsc_channel_from_snr
 from semcom.data.europarl import create_europarl_dataloaders
 from semcom.evaluation.text_metrics import (
     corpus_bleu_score,
@@ -61,6 +61,8 @@ def train_one_epoch(
     mine_optimizer: torch.optim.Optimizer | None,
     mi_weight: float,
     mi_gradient_clip_norm: float,
+    channel_name: str,
+    rician_k_factor: float,
     snr_db_min: float = 5,
     snr_db_max: float = 10,
 ) -> dict[str, float]:
@@ -80,7 +82,11 @@ def train_one_epoch(
             snr_db_max=snr_db_max,
         )
 
-        channel = create_deepsc_awgn_channel_from_snr(snr_db).to(device)
+        channel = create_deepsc_channel_from_snr(
+            channel_name=channel_name,
+            snr_db=snr_db,
+            rician_k_factor=rician_k_factor,
+        ).to(device)
 
         if mine_net is not None and mine_optimizer is not None:
             mi_estimate = train_mi_one_batch(
@@ -387,6 +393,8 @@ def main() -> None:
             mine_optimizer=mine_optimizer,
             mi_weight=float(cfg.mutual_information.weight),
             mi_gradient_clip_norm=float(cfg.mutual_information.gradient_clip_norm),
+            channel_name=str(cfg.channel.name),
+            rician_k_factor=float(cfg.channel.get("rician_k_factor", 1.0)),
             snr_db_min=cfg.training.snr_db_min,
             snr_db_max=cfg.training.snr_db_max,
         )
@@ -417,7 +425,11 @@ def main() -> None:
     evaluation_results = []
 
     for snr_db in cfg.evaluation.snr_values_db:
-        eval_channel = create_deepsc_awgn_channel_from_snr(float(snr_db)).to(device)
+        eval_channel = create_deepsc_channel_from_snr(
+            channel_name=str(cfg.channel.name),
+            snr_db=float(snr_db),
+            rician_k_factor=float(cfg.channel.get("rician_k_factor", 1.0)),
+        ).to(device)
 
         result = evaluate(
             model=model,
@@ -460,6 +472,7 @@ def main() -> None:
             "name": str(cfg.channel.name),
             "normalization": str(cfg.channel.normalization),
             "noise_mapping": str(cfg.channel.noise_mapping),
+            "rician_k_factor": float(cfg.channel.get("rician_k_factor", 1.0)),
             "training_snr_db_min": float(cfg.training.snr_db_min),
             "training_snr_db_max": float(cfg.training.snr_db_max),
             "evaluation_snr_values_db": list(cfg.evaluation.snr_values_db),

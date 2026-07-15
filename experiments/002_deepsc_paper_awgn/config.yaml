@@ -30,6 +30,7 @@ channel:
   name: awgn
   normalization: deepsc_global
   noise_mapping: deepsc_snr_to_noise
+  rician_k_factor: 1.0
   # snr_db: 10.0
 
 dataset:
