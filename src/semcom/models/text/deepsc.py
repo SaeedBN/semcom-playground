@@ -3,16 +3,7 @@ import math
 import torch
 from torch import nn
 
-
-def power_normalize(x: torch.Tensor) -> torch.Tensor:
-    """This is what the authors implemented, doesn't make sense for me,
-    TODO: add token-wise or sentense-wise normalization"""
-    power = torch.sqrt(torch.mean(x * x))
-
-    if power.item() > 1.0:
-        return x / power
-
-    return x
+from semcom.channels.deepsc import power_normalize_deepsc
 
 
 class DeepSCTextModel(nn.Module):
@@ -210,7 +201,7 @@ class DeepSCTextModel(nn.Module):
         )
 
         channel_encoded = self.channel_encoder(memory)
-        transmitted_symbols = power_normalize(channel_encoded)
+        transmitted_symbols = power_normalize_deepsc(channel_encoded)
 
         if channel is not None:
             received_symbols = channel(transmitted_symbols)

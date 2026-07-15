@@ -28,6 +28,8 @@ model:
 
 channel:
   name: awgn
+  normalization: deepsc_global
+  noise_mapping: deepsc_snr_to_noise
   # snr_db: 10.0
 
 dataset:

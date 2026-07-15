@@ -3,10 +3,9 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from omegaconf import OmegaConf
 from torch import nn
 
-from semcom.channels.factory import create_channel
+from semcom.channels.deepsc import create_deepsc_awgn_channel_from_snr
 from semcom.data.europarl import create_europarl_dataloaders
 from semcom.evaluation.text_metrics import (
     corpus_bleu_score,
@@ -38,16 +37,6 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
-
-
-def create_awgn_channel_given_snr(snr_db: float) -> nn.Module:
-    channel_cfg = OmegaConf.create(
-        {
-            "name": "awgn",
-            "snr_db": snr_db,
-        }
-    )
-    return create_channel(channel_cfg)
 
 
 def sample_training_snr(
@@ -91,7 +80,7 @@ def train_one_epoch(
             snr_db_max=snr_db_max,
         )
 
-        channel = create_awgn_channel_given_snr(snr_db).to(device)
+        channel = create_deepsc_awgn_channel_from_snr(snr_db).to(device)
 
         if mine_net is not None and mine_optimizer is not None:
             mi_estimate = train_mi_one_batch(
@@ -418,7 +407,7 @@ def main() -> None:
         )
 
         if "mi_lower_bound" in train_metrics:
-            log_message += f" | mi={train_metrics['mi_lower_bound']}"
+            log_message += f" | mi={train_metrics['mi_lower_bound']:.4f}"
 
         log_message += f" | token_acc={train_metrics['token_accuracy']:.4f} "
         log_message += f" | seq_acc={train_metrics['sequence_accuracy']:.4f}"
@@ -428,7 +417,7 @@ def main() -> None:
     evaluation_results = []
 
     for snr_db in cfg.evaluation.snr_values_db:
-        eval_channel = create_awgn_channel_given_snr(float(snr_db)).to(device)
+        eval_channel = create_deepsc_awgn_channel_from_snr(float(snr_db)).to(device)
 
         result = evaluate(
             model=model,
@@ -467,6 +456,14 @@ def main() -> None:
     metrics = {
         "experiment_name": cfg.experiment.name,
         "paper_reference": cfg.paper.title,
+        "channel": {
+            "name": str(cfg.channel.name),
+            "normalization": str(cfg.channel.normalization),
+            "noise_mapping": str(cfg.channel.noise_mapping),
+            "training_snr_db_min": float(cfg.training.snr_db_min),
+            "training_snr_db_max": float(cfg.training.snr_db_max),
+            "evaluation_snr_values_db": list(cfg.evaluation.snr_values_db),
+        },
         "training_snr_db_min": cfg.training.snr_db_min,
         "training_snr_db_max": cfg.training.snr_db_max,
         "evaluation_snr_values_db": list(cfg.evaluation.snr_values_db),
