@@ -6,6 +6,7 @@
         "tests"
     ],
     "editor.formatOnSave": true,
+    "editor.colorDecorators": true,
     "python.analysis.extraPaths": [
         "${workspaceFolder}/src"
     ],

@@ -27,3 +27,9 @@ make run-deepsc-text CP=experiments/003_deepsc_paper_rayleigh/config.yaml
 ```text
 results/003_deepsc_paper_rayleigh/
 ```
+
+## Plots
+
+![Training metrics](plots/training_metrics.png)
+
+![Evaluation metrics](plots/evaluation_metrics.png)

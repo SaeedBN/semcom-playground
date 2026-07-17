@@ -27,3 +27,21 @@ make run-deepsc-text CP=experiments/002_deepsc_paper_awgn/config.yaml
 ```text
 results/002_deepsc_paper_awgn/
 ```
+
+## Plots
+
+![Training metrics](plots/training_metrics.png)
+
+![Evaluation metrics](plots/evaluation_metrics.png)
+
+## Sample Reconstructions
+
+| SNR (dB) | Original | Reconstructed |
+|---:|---|---|
+| 0 | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . | i approve an effective and for our proposal again developed food terms there today which a dramatic provision and discuss particular i does discuss purposes parliaments military purposes . |
+| 3 | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . | i approve the . proposed amendments which once not highlight galileo s importance as a civilian civilian project have proved any possibility of using space for military fight . |
+| 6 | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any immigration of using space for military purposes . |
+| 9 | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . |
+| 12 | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . |
+| 15 | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . |
+| 18 | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . | i approve of the proposed amendments which once again highlight galileo s importance as a strictly civilian project and reject any possibility of using space for military purposes . |

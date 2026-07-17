@@ -27,3 +27,9 @@ make run-deepsc-text CP=experiments/004_deepsc_paper_rician/config.yaml
 ```text
 results/004_deepsc_paper_rician/
 ```
+
+## Plots
+
+![Training metrics](plots/training_metrics.png)
+
+![Evaluation metrics](plots/evaluation_metrics.png)
