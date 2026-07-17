@@ -1,7 +1,7 @@
 experiment:
-  name: 003_deepsc_paper_rayleigh
+  name: 004_deepsc_paper_rician
   seed: 42
-  output_dir: results/003_deepsc_paper_rayleigh
+  output_dir: results/004_deepsc_paper_rician
 
 modality:
   name: text
