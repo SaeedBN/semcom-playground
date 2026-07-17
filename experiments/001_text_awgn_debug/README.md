@@ -1,24 +1,21 @@
-# Experiment 001 — Text Semantic Communication over AWGN
+# Experiment 001 — Text AWGN Debug
 
-This experiment trains a simple Transformer-based text semantic autoencoder over an AWGN channel. It is mainly for debugging and setting up the project.
+Small debug run for the text semantic autoencoder over AWGN.
 
-## Goal
+## Config
 
-Verifying the pipeline:
-
-token IDs
-→ semantic encoder
-→ latent representation
-→ AWGN channel
-→ semantic decoder
-→ reconstructed token IDs
-
-## Metircs
-
-- Reconstruction loss (Cross Entropy)
-- Token Accuracy
-- Sequence Accuracy
+```text
+experiments/001_text_awgn_debug/config.yaml
+```
 
 ## Run
 
-python scripts/train.py --config-path experiments/001_text_awgn_debug/config.yaml
+```bash
+python scripts/train.py -c experiments/001_text_awgn_debug/config.yaml
+```
+
+## Metrics
+
+- Cross-entropy loss
+- Token accuracy
+- Sequence accuracy

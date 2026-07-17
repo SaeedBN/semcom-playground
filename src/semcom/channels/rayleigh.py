@@ -5,8 +5,6 @@ from torch import nn
 
 
 class RayleighChannel(nn.Module):
-    """Rayleigh fading channel with AWGN."""
-
     def __init__(self, snr_db: float = 10, eps: float = 1e-12) -> None:
         super().__init__()
 

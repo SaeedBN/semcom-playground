@@ -1,0 +1,71 @@
+experiment:
+  name: 003_deepsc_paper_rayleigh
+  seed: 42
+  output_dir: results/003_deepsc_paper_rayleigh
+
+modality:
+  name: text
+
+paper:
+  name: deepsc
+  title: Deep Learning Enabled Semantic Communication Systems
+  alignment:
+    dataset: europarl
+    channel: awgn
+    architecture: table_i_style
+
+model:
+  name: deepsc_text_paper
+  d_model: 128
+  n_heads: 8
+  num_encoder_layers: 3
+  num_decoder_layers: 3
+  d_ff: 512
+  channel_encoder_hidden_dim: 256
+  channel_symbols_dim: 16
+  channel_decoder_hidden_dim: 512
+  dropout: 0.1
+
+channel:
+  name: rayleigh
+  normalization: deepsc_global
+  noise_mapping: deepsc_snr_to_noise
+  rician_k_factor: 1.0
+  # snr_db: 10.0
+
+dataset:
+  name: europarl_text
+  text_path: dataset/processed/europarl/
+  min_words: 4
+  max_words: 30
+  max_length: 32
+  max_samples: 2000
+  train_fraction: 0.9
+  batch_size: 16
+  shuffle_train: true
+
+mutual_information:
+  enabled: true
+  hidden_size: 10
+  learning_rate: 0.001
+  weight: 0.0009
+  gradient_clip_norm: 10.0
+
+training:
+  epochs: 1
+  learning_rate: 0.0005
+  weight_decay: 0.0005
+  adam_beta1: 0.9
+  adam_beta2: 0.98
+  adam_eps: 1e-8
+  device: cpu
+  snr_db_min: 5
+  snr_db_max: 10
+
+evaluation:
+  snr_values_db: [0, 3, 6, 9, 12, 15, 18]
+  num_reconstruction_examples: 5
+
+tracking:
+  backend: offline
+  log_dir: results/logs
