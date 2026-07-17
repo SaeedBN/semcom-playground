@@ -27,7 +27,7 @@ model:
   dropout: 0.1
 
 channel:
-  name: rician
+  name: rayleigh
   normalization: deepsc_global
   noise_mapping: deepsc_snr_to_noise
   rician_k_factor: 1.0
