@@ -223,6 +223,8 @@ results/
 checkpoints/
 artifacts/
 mlruns/
+experiments/*/metrics.json
+experiments/*/model.pt
 
 # Data
 dataset/
