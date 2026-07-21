@@ -34,9 +34,39 @@ class DeepSCRayleighChannel(nn.Module):
         self.noise_std = float(noise_std)
 
     def forward(self, transmitted_symbols: torch.Tensor) -> torch.Tensor:
-        fading = _rayleigh_fading_like(transmitted_symbols)
-        noise = torch.randn_like(transmitted_symbols) * self.noise_std
-        return fading * transmitted_symbols + noise
+        original_shape = transmitted_symbols.shape
+        symbols_per_batch = transmitted_symbols[0].numel()
+
+        if symbols_per_batch % 2 != 0:
+            raise ValueError(
+                "DeepSC Rayleigh channel expects an even number of transmitted "
+                "features per batch item."
+            )
+
+        real = torch.randn(
+            (),
+            device=transmitted_symbols.device,
+            dtype=transmitted_symbols.dtype,
+        ) / math.sqrt(2.0)
+        imag = torch.randn(
+            (),
+            device=transmitted_symbols.device,
+            dtype=transmitted_symbols.dtype,
+        ) / math.sqrt(2.0)
+        fading = torch.stack(
+            (
+                torch.stack((real, -imag)),
+                torch.stack((imag, real)),
+            )
+        )
+
+        paired_symbols = transmitted_symbols.reshape(original_shape[0], -1, 2)
+        faded_symbols = torch.matmul(paired_symbols, fading)
+        noise = torch.randn_like(faded_symbols) * self.noise_std
+        received_symbols = faded_symbols + noise
+        equalized_symbols = torch.matmul(received_symbols, torch.inverse(fading))
+
+        return equalized_symbols.reshape(original_shape)
 
 
 class DeepSCRicianChannel(nn.Module):
@@ -54,12 +84,41 @@ class DeepSCRicianChannel(nn.Module):
         self.k_factor = float(k_factor)
 
     def forward(self, transmitted_symbols: torch.Tensor) -> torch.Tensor:
-        fading = _rician_fading_like(
-            transmitted_symbols,
-            k_factor=self.k_factor,
+        original_shape = transmitted_symbols.shape
+        symbols_per_batch = transmitted_symbols[0].numel()
+
+        if symbols_per_batch % 2 != 0:
+            raise ValueError(
+                "DeepSC Rician channel expects an even number of transmitted "
+                "features per batch item."
+            )
+
+        los_scale = math.sqrt(self.k_factor / (self.k_factor + 1.0))
+        scatter_scale = math.sqrt(1.0 / (2.0 * (self.k_factor + 1.0)))
+        real = los_scale + scatter_scale * torch.randn(
+            (),
+            device=transmitted_symbols.device,
+            dtype=transmitted_symbols.dtype,
         )
-        noise = torch.randn_like(transmitted_symbols) * self.noise_std
-        return fading * transmitted_symbols + noise
+        imag = scatter_scale * torch.randn(
+            (),
+            device=transmitted_symbols.device,
+            dtype=transmitted_symbols.dtype,
+        )
+        fading = torch.stack(
+            (
+                torch.stack((real, -imag)),
+                torch.stack((imag, real)),
+            )
+        )
+
+        paired_symbols = transmitted_symbols.reshape(original_shape[0], -1, 2)
+        faded_symbols = torch.matmul(paired_symbols, fading)
+        noise = torch.randn_like(faded_symbols) * self.noise_std
+        received_symbols = faded_symbols + noise
+        equalized_symbols = torch.matmul(received_symbols, torch.inverse(fading))
+
+        return equalized_symbols.reshape(original_shape)
 
 
 def create_deepsc_awgn_channel_from_snr(snr_db: float) -> DeepSCAWGNChannel:
@@ -98,22 +157,3 @@ def create_deepsc_channel_from_snr(
         )
 
     raise ValueError(f"DeepSC channel {channel_name} is not supported.")
-
-
-def _rayleigh_fading_like(x: torch.Tensor) -> torch.Tensor:
-    real = torch.randn_like(x) / math.sqrt(2.0)
-    imag = torch.randn_like(x) / math.sqrt(2.0)
-    return torch.sqrt(real * real + imag * imag)
-
-
-def _rician_fading_like(
-    x: torch.Tensor,
-    k_factor: float,
-) -> torch.Tensor:
-    los_scale = math.sqrt(k_factor / (k_factor + 1.0))
-    scatter_scale = math.sqrt(1.0 / (2.0 * (k_factor + 1.0)))
-
-    real = los_scale + scatter_scale * torch.randn_like(x)
-    imag = scatter_scale * torch.randn_like(x)
-
-    return torch.sqrt(real * real + imag * imag)
