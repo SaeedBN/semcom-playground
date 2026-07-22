@@ -13,7 +13,6 @@ dependencies = [
     "torch",
     "hydra-core",
     "omegaconf",
-    "pytest",
     "w3lib",
     "nltk",
     "sionna",
