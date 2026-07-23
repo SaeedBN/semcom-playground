@@ -155,6 +155,10 @@ def prepare_europarl(input_dir: str | Path, output_path: str | Path) -> dict[str
     with (output_path / "vocab.json").open("w", encoding="utf-8") as file:
         json.dump({"token_to_idx": token_to_idx}, file, indent=2)
 
+    with (output_path / "sentences.txt").open("w", encoding="utf-8") as file:
+        for sents in sentences:
+            file.write(sents + "\n")
+
     return {
         "num_files": len(txt_files),
         "num_sentences": len(sentences),

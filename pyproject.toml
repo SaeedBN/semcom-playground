@@ -16,6 +16,7 @@ dependencies = [
     "w3lib",
     "nltk",
     "sionna",
+    "sentence-transformers",
 ]
 
 [project.optional-dependencies]

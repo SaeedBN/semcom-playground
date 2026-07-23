@@ -12,9 +12,29 @@ experiments/002_deepsc_paper_awgn/config.yaml
 
 ## Dataset
 
+```bash
+make prepare-europarl IN=dataset/raw/europarl/
+```
+
+`IN` can be any directory containing the dataset's `.txt` files.
+
+The default output directory is:
+
 ```text
 dataset/processed/europarl/
 ```
+
+If needed, change it by running the preparation script directly with
+`--output-path`:
+
+```bash
+python src/semcom/data/prepare_europarl.py \
+  --input-dir dataset/raw/europarl/ \
+  --output-path path/to/output/
+```
+
+If you change the default output directory, update `dataset.text_path` in
+`config.yaml` to use the same path.
 
 ## Run
 
