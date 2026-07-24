@@ -8,7 +8,7 @@ Current PHY assumption:
 Run:
 
 ```bash
-./experiments/005_text_embedding_retrieval_ofdm/run.sh
+make run-text-embed-eval CP=experiments/005_text_embedding_retrieval_ofdm/config.yaml
 ```
 
 Config:

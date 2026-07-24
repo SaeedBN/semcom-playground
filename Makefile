@@ -1,4 +1,4 @@
-.PHONY: test train train-dbg lint format docker-build docker-test docker-train docker-shell prepare-europarl run-deepsc-text docker-run-deepsc-text
+.PHONY: test train train-dbg lint format docker-build docker-test docker-train docker-shell prepare-europarl run-deepsc-text docker-run-deepsc-text run-text-embed-eval
 
 test:
 	pytest
@@ -35,3 +35,6 @@ run-deepsc-text:
 
 docker-run-deepsc-text:
 	docker compose run --rm semcom make run-deepsc-text CP=$(CP)
+
+run-text-embed-eval:
+	python scripts/run_text_embedding_retrieval_ofdm.py -c $(CP)

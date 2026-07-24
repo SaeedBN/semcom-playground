@@ -8,7 +8,7 @@ Current PHY assumption:
 Run:
 
 ```bash
-./experiments/006_text_embedding_retrieval_ofdm_rayleigh/run.sh
+make run-text-embed-eval CP=experiments/006_text_embedding_retrieval_ofdm_rayleigh/config.yaml
 ```
 
 Config:
