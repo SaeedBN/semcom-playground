@@ -117,3 +117,18 @@ def create_europarl_dataloaders(
     )
 
     return train_loader, test_loader, dataset.token_to_idx
+
+
+def load_europarl_sentences(
+    text_path: str | Path,
+    max_sentences: int | None = None,
+) -> list[str]:
+    text_path = Path(text_path)
+
+    with text_path.open("r", encoding="utf-8") as file:
+        sentences = [line.strip() for line in file if line.strip()]
+
+    if max_sentences is not None:
+        sentences = sentences[:max_sentences]
+
+    return sentences

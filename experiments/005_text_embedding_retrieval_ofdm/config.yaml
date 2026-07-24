@@ -1,0 +1,61 @@
+experiment:
+  name: 005_text_embedding_retrieval_ofdm
+  seed: 42
+  output_dir: results/005_text_embedding_retrieval_ofdm
+  device: cpu
+
+modality:
+  name: text
+
+dataset:
+  name: europarl_sentences
+  text_path: dataset/processed/europarl/sentences.txt
+  max_sentences: 5000
+  query_fraction: 0.1
+
+semantic:
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  normalize: true
+
+quantizer:
+  bits_per_dim: 4
+  clip_value: 1.0
+
+channel:
+  name: ofdm_digital
+
+phy:
+  coding:
+    scheme: ldpc5g
+    k: 624
+    n: 1248
+
+  modulation:
+    constellation: qpsk
+    num_bits_per_symbol: 2
+
+  resource_grid:
+    fft_size: 64
+    num_ofdm_symbols: 14
+    subcarrier_spacing_hz: 15000.0
+    cyclic_prefix_length: 6
+    num_tx: 1
+    num_streams_per_tx: 1
+    pilot_pattern: kronecker
+    pilot_ofdm_symbol_indices: [2, 11]
+    dc_null: true
+    num_guard_carriers: [5, 6]
+
+  estimation:
+    perfect_csi: true
+    equalizer: lmmse
+
+  channel_model:
+    # Propagation model used inside the OFDM digital link.
+    type: awgn
+
+evaluation:
+  ebno_db_values: [0, 2, 4, 6, 8, 10, 12]
+  num_trials: 5
+  top_k: [1, 5, 10]
+  num_examples: 5
